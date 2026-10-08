@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบจัดการข้อมูล Over Time (OT)</title>
+    <!-- อ่าน/ส่งออก Excel (SheetJS) และ วาดกราฟ (Chart.js) -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- เชื่อมต่อไฟล์ CSS -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h2>⏰ ระบบจัดการข้อมูล Over Time 2026</h2>
+        <button class="btn-success" onclick="exportExcel()">📤 ส่งออกไฟล์ Excel (.xlsx)</button>
+    </div>
+
+    <!-- 1. ตั้งค่าอัตราค่าจ้าง -->
+    <div class="section" style="background: #f0f9ff; border-color: #bae6fd;">
+        <strong style="color: #0369a1;">⚙️ ตั้งค่าอัตราค่าจ้างต่อชั่วโมง (Wage Rate Settings)</strong>
+        <div class="form-grid">
+            <div>
+                <label style="font-size: 12px; font-weight: bold; color: #0369a1;">ค่าจ้างฐาน (บาท/ชม.):</label>
+                <input type="number" id="baseRateInput" step="0.01" value="65.30" oninput="autoCalcRates()" style="width: 100%; box-sizing: border-box;">
+            </div>
+            <div>
+                <label style="font-size: 12px; font-weight: bold;">OT 1.0 (บาท/ชม.):</label>
+                <input type="number" id="rate10Input" step="0.01" value="65.30" style="width: 100%; box-sizing: border-box;">
+            </div>
+            <div>
+                <label style="font-size: 12px; font-weight: bold;">OT 1.5 (บาท/ชม.):</label>
+                <input type="number" id="rate15Input" step="0.01" value="98.00" style="width: 100%; box-sizing: border-box;">
+            </div>
+            <div>
+                <label style="font-size: 12px; font-weight: bold;">OT 3.0 (บาท/ชม.):</label>
+                <input type="number" id="rate30Input" step="0.01" value="196.00" style="width: 100%; box-sizing: border-box;">
+            </div>
+            <div style="display: flex; align-items: flex-end;">
+                <button class="btn-warning" onclick="updateRates()" style="width: 100%; height: 38px;">🔄 อัปเดตอัตราค่าจ้าง</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. นำเข้าไฟล์ -->
+    <div class="section">
+        <strong>📥 นำเข้าไฟล์ Excel (.xlsx)</strong>
+        <input type="file" id="excelFile" accept=".xlsx, .xls" style="margin-left: 10px;">
+    </div>
+
+    <!-- 3. ฟอร์มเพิ่มข้อมูล -->
+    <div class="section">
+        <strong>➕ เพิ่มรายการ OT ใหม่</strong>
+        <div class="form-grid">
+            <div>
+                <label style="font-size: 12px;">วันที่:</label>
+                <input type="date" id="addDate" style="width: 100%; box-sizing: border-box;">
+            </div>
+            <div>
+                <label style="font-size: 12px;">OT 1.0 (ชม.):</label>
+                <input type="number" id="addOt1" step="0.5" value="0" style="width: 100%; box-sizing: border-box;">
+            </div>
+            <div>
+                <label style="font-size: 12px;">OT 1.5 (ชม.):</label>
+                <input type="number" id="addOt15" step="0.5" value="0" style="width: 100%; box-sizing: border-box;">
+            </div>
+            <div>
+                <label style="font-size: 12px;">OT 3.0 (ชม.):</label>
+                <input type="number" id="addOt3" step="0.5" value="0" style="width: 100%; box-sizing: border-box;">
+            </div>
+            <div style="display: flex; align-items: flex-end;">
+                <button onclick="addEntry()" style="width: 100%; height: 38px;">+ เพิ่มรายการ</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. Cards สรุปยอด KPI -->
+    <div class="summary-cards">
+        <div class="card"><div class="title">จำนวนวันทำงาน</div><div class="value" id="sumDays">0 วัน</div></div>
+        <div class="card"><div class="title">รวม OT 1.0</div><div class="value" id="sumOt1">0.0 ชม.</div></div>
+        <div class="card"><div class="title">รวม OT 1.5</div><div class="value" id="sumOt15">0.0 ชม.</div></div>
+        <div class="card"><div class="title">รวม OT 3.0</div><div class="value" id="sumOt3">0.0 ชม.</div></div>
+        <div class="card"><div class="title">รวมชั่วโมงทั้งหมด</div><div class="value" id="sumTotalHours">0.0 ชม.</div></div>
+        <div class="card card-total"><div class="title">ยอดเงิน OT รวมทั้งสิ้น</div><div class="value" id="sumGrandTotal">0.00 บาท</div></div>
+    </div>
+
+    <!-- 5. ส่วนแสดงผลกราฟ -->
+    <div class="charts-grid">
+        <div class="chart-box">
+            <h4 style="margin:0 0 10px 0; text-align:center;">📊 จำนวนชั่วโมง OT ในแต่ละวัน</h4>
+            <canvas id="barChart" height="200"></canvas>
+        </div>
+        <div class="chart-box">
+            <h4 style="margin:0 0 10px 0; text-align:center;">🍩 สัดส่วนค่าตอบแทน OT แต่ละประเภท</h4>
+            <canvas id="doughnutChart" height="200"></canvas>
+        </div>
+    </div>
+
+    <!-- 6. ตารางข้อมูล -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px;">
+        <h3>📋 รายการข้อมูล Over Time</h3>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>ลำดับ</th>
+                <th>วันที่</th>
+                <th>OT 1.0 (ชม.)</th>
+                <th>OT 1.5 (ชม.)</th>
+                <th>OT 3.0 (ชม.)</th>
+                <th>รวมชั่วโมง</th>
+                <th>จำนวนเงิน (บาท)</th>
+                <th>การจัดการ</th>
+            </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+    </table>
+</div>
+
+<!-- Modal สำหรับแก้ไขข้อมูล -->
+<div id="editModal" class="modal">
+    <div class="modal-content">
+        <h3>✏️ แก้ไขรายการ OT</h3>
+        <input type="hidden" id="editIndex">
+        <p><label>วันที่:</label><br><input type="date" id="editDate" style="width: 100%;"></p>
+        <p><label>OT 1.0 (ชม.):</label><br><input type="number" id="editOt1" step="0.5" style="width: 100%;"></p>
+        <p><label>OT 1.5 (ชม.):</label><br><input type="number" id="editOt15" step="0.5" style="width: 100%;"></p>
+        <p><label>OT 3.0 (ชม.):</label><br><input type="number" id="editOt3" step="0.5" style="width: 100%;"></p>
+        <div style="text-align: right; margin-top: 20px;">
+            <button class="btn-warning" onclick="saveEdit()">บันทึกการแก้ไข</button>
+            <button style="background:#64748b;" onclick="closeEditModal()">ยกเลิก</button>
+        </div>
+    </div>
+</div>
+
+<!-- เชื่อมต่อไฟล์ JavaScript -->
+<script src="script.js"></script>
+</body>
+</html>
